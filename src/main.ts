@@ -2,10 +2,11 @@ import { Wallet, Contract, providers, BigNumber } from "ethers";
 import cEthAbi from "./abis/cEth.json";
 import cTokenAbi from "./abis/cToken.json";
 import compAbi from "./abis/comptroller.json";
+import compoundLensAbi from "./abis/compoundLens.json";
 import erc20Abi from "./abis/erc20.json";
 import priceFeedAbi from "./abis/priceFeed.json";
 const provider = new providers.JsonRpcProvider(
-  "https://kovan.infura.io/v3/2b17a18942384c25ad91e8636764a89f"
+  "https://mainnet.infura.io/v3/2b17a18942384c25ad91e8636764a89f"
 );
 
 // Just Test Account
@@ -13,37 +14,73 @@ const privateKey =
   "4f4b5c6ddc896de134f2a8e3d0cc5925a15e2b20656eab74f423b31eaf14d69c";
 const wallet = new Wallet(privateKey, provider);
 const myWalletAddress = wallet.address;
-const priceFeedAddress = "0xbBdE93962Ca9fe39537eeA7380550ca6845F8db7";
+const priceFeedAddress = "0x9b8eb8b3d6e2e0db36f41455185fef7049a35cae";
 const priceFeed = new Contract(priceFeedAddress, priceFeedAbi, wallet);
 
-const comptrollerContractAddress = "0x5eae89dc1c671724a672ff0630122ee834098657";
+const comptrollerContractAddress = "0x3d9819210a31b4961b30ef54be2aed79b9c9cd3b";
 const comptrollerContract = new Contract(
   comptrollerContractAddress,
   compAbi,
-  wallet
+  provider
 );
 
 const allMarkets = [
   {
     symbol: "DAI",
-    underlyingAddress: "0x4F96Fe3b7A6Cf9725f59d353F723c1bDb64CA6Aa",
-    address: "0xF0d0EB522cfa50B716B3b1604C4F0fA6f04376AD",
+    underlyingAddress: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+    address: "0x5d3a536e4d6dbd6114cc1ead35777bab948e3643",
     decimals: 18,
   },
   {
     symbol: "ETH",
-    underlyingAddress: "0x0000000000000000000000000000000000000000",
-    address: "0x41B5844f4680a8C38fBb695b7F9CFd1F64474a72",
+    underlyingAddress: "",
+    address: "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5",
     decimals: 18,
     native: true,
   },
   {
     symbol: "BAT",
-    underlyingAddress: "0x482dC9bB08111CB875109B075A40881E48aE02Cd",
-    address: "0x4a77fAeE9650b09849Ff459eA1476eaB01606C7a",
+    underlyingAddress: "0x0D8775F648430679A709E98d2b0Cb6250d2887EF",
+    address: "0x6C8c6b02E7b2BE14d4fA6022Dfd6d75921D90E4E",
     decimals: 18,
   },
 ];
+
+/**
+ * compRate compUSDPrice compSpeedPerDay marketTotalUSDValue =
+    Decimal.fastdiv (Decimal.mul compUSDPrice compSpeedPerDay) marketTotalUSDValue
+        |> Maybe.map
+            (\compOverMarket ->
+                Decimal.sub (pow365 (Decimal.add Decimal.one compOverMarket)) Decimal.one
+            )
+ */
+const distributionAPY = async function () {
+  const { address, symbol, decimals } = allMarkets[0];
+  const cTokenContract = new Contract(address, cTokenAbi, wallet);
+  const cashAmount = await cTokenContract.callStatic.getCash();
+  const borrowAmount = await cTokenContract.callStatic.totalBorrowsCurrent();
+  let compSpeed = await comptrollerContract.callStatic.compSpeeds(address);
+  const underlyingTokenUSDPrice = (await priceFeed.price(symbol)) / 1e6;
+  compSpeed / 1e18;
+  compSpeed = compSpeed / 1e18;
+  // COMP issued to suppliers OR borrowers
+  const compSpeedPerDay = compSpeed * 4 * 60 * 24;
+  const compUSDPrice = (await priceFeed.price("COMP")) / 1e6;
+
+  const compSupplyRatePerDay =
+    (compSpeedPerDay * compUSDPrice) /
+    (((cashAmount + borrowAmount) * underlyingTokenUSDPrice) / decimals);
+
+  const compBorrowRatePerDay =
+    (compSpeedPerDay * compUSDPrice) /
+    ((borrowAmount * underlyingTokenUSDPrice) / decimals);
+
+  const distributionSupplyAPY = calculateAPY(compSupplyRatePerDay);
+  const distributionBorrowAPY = calculateAPY(compBorrowRatePerDay);
+
+  console.log("Distribution Supply APY: ", distributionSupplyAPY);
+  console.log("Distribution Borrow APY: ", distributionBorrowAPY);
+};
 
 const summary = async function () {
   // Supply APY
@@ -54,8 +91,6 @@ const summary = async function () {
   console.log("supply APY:", supplAPY);
 
   // Distribution APY
-  const compSpeed = await comptrollerContract.compSpeeds(cDAIAddress);
-  console.log("Distribution APY:", compSpeed);
 
   // Collateral Factor
   let { 1: collateralFactor } = await comptrollerContract.callStatic.markets(
@@ -133,11 +168,18 @@ const summary = async function () {
   // Borrow Limit Used
   console.log(
     "Borrow Limit Used:",
-    (totalBorrowed / (totalBorrowed + currentLiquidity)) * 100
+    currentLiquidity === 0
+      ? 0
+      : (totalBorrowed / (totalBorrowed + currentLiquidity)) * 100
   );
 
   // Health
-  console.log("Health:", (totalBorrowed + currentLiquidity) / totalBorrowed);
+  console.log(
+    "Health:",
+    totalBorrowed === 0
+      ? 100
+      : (totalBorrowed + currentLiquidity) / totalBorrowed
+  );
 };
 
 const collateral = async function () {
@@ -307,7 +349,7 @@ const borrow = async () => {
 };
 
 const main = async () => {
-  await summary();
+  await distributionAPY();
 };
 
 main().catch((err) => {

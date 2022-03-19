@@ -2,6 +2,8 @@
 /* tslint:disable */
 /* eslint-disable */
 export type { CEth } from "./CEth";
+export type { Comp } from "./Comp";
+export type { CompoundLens } from "./CompoundLens";
 export type { Comptroller } from "./Comptroller";
 export type { CToken } from "./CToken";
 export type { Erc20 } from "./Erc20";
@@ -9,6 +11,8 @@ export type { PriceFeed } from "./PriceFeed";
 export type { PriceOracle } from "./PriceOracle";
 
 export { CEth__factory } from "./factories/CEth__factory";
+export { Comp__factory } from "./factories/Comp__factory";
+export { CompoundLens__factory } from "./factories/CompoundLens__factory";
 export { Comptroller__factory } from "./factories/Comptroller__factory";
 export { CToken__factory } from "./factories/CToken__factory";
 export { Erc20__factory } from "./factories/Erc20__factory";
