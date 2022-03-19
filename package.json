@@ -1,0 +1,23 @@
+{
+  "name": "compound",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "contracts:compile:abi": "typechain --target ethers-v5 --out-dir src/abis/types \"./src/abis/**/*.json\""
+  },
+  "devDependencies": {
+    "typescript": "^4.5.4",
+    "vite": "^2.8.0"
+  },
+  "dependencies": {
+    "@metamask/providers": "^8.1.1",
+    "@typechain/ethers-v5": "^9.0.0",
+    "@typechain/web3-v1": "^5.0.0",
+    "ethers": "^5.6.1",
+    "typechain": "^7.0.1",
+    "web3": "^1.7.1"
+  }
+}
