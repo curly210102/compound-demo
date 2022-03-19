@@ -5,8 +5,12 @@ export type { CEth } from "./CEth";
 export type { Comptroller } from "./Comptroller";
 export type { CToken } from "./CToken";
 export type { Erc20 } from "./Erc20";
+export type { PriceFeed } from "./PriceFeed";
+export type { PriceOracle } from "./PriceOracle";
 
 export { CEth__factory } from "./factories/CEth__factory";
 export { Comptroller__factory } from "./factories/Comptroller__factory";
 export { CToken__factory } from "./factories/CToken__factory";
 export { Erc20__factory } from "./factories/Erc20__factory";
+export { PriceFeed__factory } from "./factories/PriceFeed__factory";
+export { PriceOracle__factory } from "./factories/PriceOracle__factory";

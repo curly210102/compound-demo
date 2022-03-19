@@ -4,7 +4,6 @@ import cTokenAbi from "./abis/cToken.json";
 import compAbi from "./abis/comptroller.json";
 import erc20Abi from "./abis/erc20.json";
 import priceFeedAbi from "./abis/priceFeed.json";
-import { Erc20 } from "./abis/types";
 const provider = new providers.JsonRpcProvider(
   "https://kovan.infura.io/v3/2b17a18942384c25ad91e8636764a89f"
 );
@@ -16,6 +15,7 @@ const wallet = new Wallet(privateKey, provider);
 const myWalletAddress = wallet.address;
 const priceFeedAddress = "0xbBdE93962Ca9fe39537eeA7380550ca6845F8db7";
 const priceFeed = new Contract(priceFeedAddress, priceFeedAbi, wallet);
+
 const comptrollerContractAddress = "0x5eae89dc1c671724a672ff0630122ee834098657";
 const comptrollerContract = new Contract(
   comptrollerContractAddress,
@@ -35,6 +35,7 @@ const allMarkets = [
     underlyingAddress: "0x0000000000000000000000000000000000000000",
     address: "0x41B5844f4680a8C38fBb695b7F9CFd1F64474a72",
     decimals: 18,
+    native: true,
   },
   {
     symbol: "BAT",
@@ -72,6 +73,7 @@ const summary = async function () {
   const currentLiquidity = +liquidity[1] / Math.pow(10, 18);
   console.log("Liquidity:", currentLiquidity);
 
+  // Total Borrowed
   const totalBorrowed = (
     await Promise.all(
       allMarkets.map(async ({ address, symbol, decimals }: any) => {
@@ -86,16 +88,54 @@ const summary = async function () {
     )
   ).reduce((sum, usd) => sum + usd, 0);
 
-  console.log("Borrowed:", totalBorrowed);
-  console.log(
-    "Borrowed Limit:",
-    totalBorrowed + currentLiquidity,
+  // Total Supplied
+  const totalSupplied = (
+    await Promise.all(
+      allMarkets.map(async ({ address, symbol, decimals }: any) => {
+        const cToken = new Contract(address, cTokenAbi, wallet);
+        let underlyingPriceInUsd = await priceFeed.callStatic.price(symbol);
+        underlyingPriceInUsd = underlyingPriceInUsd / 1e6; // Price feed provides price in USD with 6 decimal places
+        const suppliedBalance = await cToken.callStatic.balanceOfUnderlying(
+          myWalletAddress
+        );
+        return (
+          underlyingPriceInUsd * (+suppliedBalance / Math.pow(10, decimals))
+        );
+      })
+    )
+  ).reduce((sum, usd) => sum + usd, 0);
+
+  // Collateralized Assets
+  const collateralAddresses = await comptrollerContract.getAssetsIn(
+    myWalletAddress
   );
+  // Total Collateral
+  const totalCollateral = (
+    await Promise.all(
+      allMarkets
+        .filter((m) => collateralAddresses.includes(m.address))
+        .map(async ({ address, symbol, decimals }: any) => {
+          const cToken = new Contract(address, cTokenAbi, wallet);
+          let underlyingPriceInUsd = await priceFeed.callStatic.price(symbol);
+          underlyingPriceInUsd = underlyingPriceInUsd / 1e6; // Price feed provides price in USD with 6 decimal places
+          const balance = await cToken.callStatic.balanceOfUnderlying(
+            myWalletAddress
+          );
+          return underlyingPriceInUsd * (+balance / Math.pow(10, decimals));
+        })
+    )
+  ).reduce((sum, usd) => sum + usd, 0);
+
+  console.log("Total Borrowed:", totalBorrowed);
+  console.log("Total Supplied:", totalSupplied);
+  console.log("Total Collateral:", totalCollateral);
+  console.log("Borrowed Limit:", totalBorrowed + currentLiquidity);
   // Borrow Limit Used
   console.log(
     "Borrow Limit Used:",
     (totalBorrowed / (totalBorrowed + currentLiquidity)) * 100
   );
+
   // Health
   console.log("Health:", (totalBorrowed + currentLiquidity) / totalBorrowed);
 };
@@ -106,6 +146,7 @@ const collateral = async function () {
   const cTokenContractAddress = allMarkets[0].address;
   const assetName = allMarkets[0].symbol;
 
+  // Whether use as collateral
   const collaterals = await comptrollerContract.getAssetsIn(
     wallet.getAddress()
   );
