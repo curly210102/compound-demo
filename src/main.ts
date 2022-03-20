@@ -1,1 +1,1 @@
-require("./compound");
+import "./compound"

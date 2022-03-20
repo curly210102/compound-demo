@@ -87,8 +87,14 @@ const summary = async function () {
   const cTokenContract = new Contract(address, cTokenAbi, wallet);
   const supplyRatePerBlock =
     await cTokenContract.callStatic.supplyRatePerBlock();
-  const supplAPY = calculateAPY(supplyRatePerBlock);
-  console.log("supply APY:", supplAPY);
+  const supplyAPY = calculateAPY(supplyRatePerBlock);
+  console.log("supply APY:", supplyAPY);
+
+  // Borrow APY
+  const borrowRatePerBlock =
+    await cTokenContract.callStatic.supplyRatePerBlock();
+  const borrowAPY = calculateAPY(borrowRatePerBlock);
+  console.log("borrow APY:", borrowAPY);
 
   // Collateral Factor
   let { 1: collateralFactor } = await comptrollerContract.callStatic.markets(
@@ -103,7 +109,7 @@ const summary = async function () {
   const liquidity = await comptrollerContract.callStatic.getAccountLiquidity(
     wallet.getAddress()
   );
-  const currentLiquidity = +liquidity[1] / Math.pow(10, 18);
+  const currentLiquidity = +liquidity[1] / 1e18;
   console.log("Liquidity:", currentLiquidity);
 
   // Total Borrowed
@@ -179,7 +185,7 @@ const summary = async function () {
   // Health: borrowLimit / totalBorrowed
   console.log(
     "Health:",
-    totalBorrowed === 0 ? 100 : (1 + currentLiquidity / totalBorrowed)
+    calculateHealth(currentLiquidity, totalBorrowed)
   );
 };
 
@@ -329,7 +335,7 @@ const withdraw = async () => {
   );
 
   // Health after withdraw
-  // totalBorrowed === 0 ? 100 : (1 + (currentLiquidity - underlyingAmount * collateralFactor * underlyingPrice) / totalBorrowed)
+  // calculateHealth(currentLiquidity - underlyingAmount * collateralFactor * underlyingPrice, totalBorrowed)
 };
 
 const borrow = async () => {
@@ -345,15 +351,15 @@ const borrow = async () => {
   await trx.wait(1);
 
   // Health after borrow
-  // totalBorrowed === 0 ? 100 : (1 + currentLiquidity / (totalBorrowed + scaledUpBorrowAmount * underlyingPrice))
+  // calculateHealth(currentLiquidity, totalBorrowed + scaledUpBorrowAmount * underlyingPrice)
 };
 
 const main = async () => {
   await summary();
-  await supply();
-  await collateral();
-  await revokeCollateral();
-  await withdraw();
+  // await supply();
+  // await collateral();
+  // await revokeCollateral();
+  // await withdraw();
 };
 
 main().catch((err) => {
@@ -370,4 +376,8 @@ function calculateAPY(ratePerBlock: number) {
       1) *
     100
   );
+}
+
+function calculateHealth (liquidity: number, totalBorrowed: number) {
+  return totalBorrowed === 0 ? 100 : Math.min(1 + liquidity / totalBorrowed, 99.99)
 }
