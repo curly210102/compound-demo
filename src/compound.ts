@@ -371,9 +371,7 @@ const main = async () => {
   // await withdraw();
 };
 
-main().catch((err) => {
-  console.error(err);
-});
+export default main;
 
 function calculateAPY(ratePerBlock: number) {
   const ethMantissa = 1e18;
