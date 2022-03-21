@@ -2,7 +2,7 @@ import { Wallet, Contract, providers, BigNumber } from "ethers";
 import cTokenAbi from "./abis/cToken.json";
 import compAbi from "./abis/comptroller.json";
 import erc20Abi from "./abis/erc20.json";
-import priceFeedAbi from "./abis/priceFeed.json";
+import priceFeedAbi from "./abis/openPriceFeed.json";
 const provider = new providers.JsonRpcProvider(
   "https://kovan.infura.io/v3/2b17a18942384c25ad91e8636764a89f"
 );
@@ -337,6 +337,15 @@ const withdraw = async () => {
   // Health after withdraw
   // calculateHealth(currentLiquidity - underlyingAmount * collateralFactor * underlyingPrice, totalBorrowed)
 };
+
+
+const borrowInfo = async () => {
+  // USD Limit
+  
+  // USDC Limit
+
+
+}
 
 const borrow = async () => {
   const { address, symbol, underlyingDecimals } = allMarkets[0];
