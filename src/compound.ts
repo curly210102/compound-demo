@@ -8,7 +8,7 @@ const provider = new providers.JsonRpcProvider(
 );
 // Just Test Account
 const privateKey =
-  "4f4b5c6ddc896de134f2a8e3d0cc5925a15e2b20656eab74f423b31eaf14d69c";
+  "abdbe6420ebba257b82c2fa7272a8f02c05033d285576b5e8edd34316fae07af";
 
 const priceFeedAddress = "0xbBdE93962Ca9fe39537eeA7380550ca6845F8db7";
 const comptrollerContractAddress = "0x5eae89dc1c671724a672ff0630122ee834098657";
@@ -183,10 +183,7 @@ const summary = async function () {
   );
 
   // Health: borrowLimit / totalBorrowed
-  console.log(
-    "Health:",
-    calculateHealth(currentLiquidity, totalBorrowed)
-  );
+  console.log("Health:", calculateHealth(currentLiquidity, totalBorrowed));
 };
 
 const collateral = async function () {
@@ -338,18 +335,21 @@ const withdraw = async () => {
   // calculateHealth(currentLiquidity - underlyingAmount * collateralFactor * underlyingPrice, totalBorrowed)
 };
 
-
 const borrowInfo = async () => {
   // USD Limit
-  
   // USDC Limit
-
-
-}
+};
 
 const borrow = async () => {
   const { address, symbol, underlyingDecimals } = allMarkets[0];
   const cTokenContract = new Contract(address, cTokenAbi, wallet);
+
+  // USDC Limit
+
+
+  // USD Limit
+  const liquidity = await comptrollerContract.getAccountLiquidity();
+  console.log("USD Limit");
 
   const underlyingToBorrow = 0.1;
   console.log(`Now attempting to borrow ${underlyingToBorrow} ${symbol}...`);
@@ -358,10 +358,9 @@ const borrow = async () => {
   ).toString();
   const trx = await cTokenContract.borrow(scaledUpBorrowAmount);
   await trx.wait(1);
-
-  // Health after borrow
-  // calculateHealth(currentLiquidity, totalBorrowed + scaledUpBorrowAmount * underlyingPrice)
+  // console.log('Borrow Transaction', trx);
 };
+
 
 const main = async () => {
   await summary();
@@ -385,6 +384,8 @@ function calculateAPY(ratePerBlock: number) {
   );
 }
 
-function calculateHealth (liquidity: number, totalBorrowed: number) {
-  return totalBorrowed === 0 ? 100 : Math.min(1 + liquidity / totalBorrowed, 99.99)
+function calculateHealth(liquidity: number, totalBorrowed: number) {
+  return totalBorrowed === 0
+    ? 100
+    : Math.min(1 + liquidity / totalBorrowed, 99.99);
 }
