@@ -1,4 +1,4 @@
-import main from "./benqi"
+import main from "./mumbai"
 import './style.css'
 
 const btn = document.querySelector<HTMLDivElement>('button')!;

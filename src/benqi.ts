@@ -158,8 +158,8 @@ const summary = async function () {
     })
   );
   const collateralFactorMap = Object.fromEntries(collateralFactors);
-  const collateralFactor = collateralFactorMap["AVAX"] * 100; // Convert to percent
-  console.log("AVAX Collateral Factor:", collateralFactor);
+  const collateralFactor = collateralFactorMap["BTC"] * 100; // Convert to percent
+  console.log("BTC Collateral Factor:", collateralFactor);
 
   // Collateralized Asset
   // 质押资产
@@ -493,7 +493,5 @@ function calculateAPY(ratePerTimestamps: number) {
 }
 
 function calculateHealth(liquidity: number, totalBorrowed: number) {
-  return totalBorrowed === 0
-    ? 100
-    : Math.min(liquidity / totalBorrowed, 100);
+  return totalBorrowed === 0 ? 100 : Math.min(liquidity / totalBorrowed, 100);
 }

@@ -9,20 +9,20 @@ const provider = new providers.JsonRpcProvider(
 // Just Test Account
 const privateKey =
   "abdbe6420ebba257b82c2fa7272a8f02c05033d285576b5e8edd34316fae07af";
-
-const priceOracleAddress = "0x7729279611991Bb4dBdeBF0cc7518428fddCa050";
-const comptrollerContractAddress = "0xADdC4b0d9A113D6295D95c9717D1b32b6b689FAE";
-const rewardTokenAddress = "0x5C0401e81Bc07Ca70fAD469b451682c0d747Ef1c";
 const wallet = new Wallet(privateKey, provider);
 const myWalletAddress = wallet.address;
-const priceOracle = new Contract(priceOracleAddress, priceOracleAbi, wallet);
 
+
+const comptrollerContractAddress = "0xADdC4b0d9A113D6295D95c9717D1b32b6b689FAE";
 const comptrollerContract = new Contract(
   comptrollerContractAddress,
   compAbi,
   wallet
 );
+const priceOracleAddress = await comptrollerContract.oracle()
+const priceOracle = new Contract(priceOracleAddress, priceOracleAbi, wallet);
 
+const rewardTokenAddress = "0x153478A3898852B29C5adaA85a2619E8C6832917";
 const allMarkets = [
   {
     symbol: "BTC",
@@ -71,7 +71,7 @@ const distributionAPY = async function () {
     Math.pow(10, underlyingDecimals);
   const totalSupply = totalCash + totalBorrows - totalReserves;
 
-  // rewardType  0: Qi, 1: Avax
+  // rewardType  0: BON, 1: MATIC
   const rewardSpeedPerTimestamp =
     await comptrollerContract.callStatic.rewardSpeeds(0, address);
 
@@ -114,127 +114,157 @@ const supplyBorrowAPY = async () => {
 };
 
 const summary = async function () {
-  const { address } = allMarkets[0];
-
   // Collateral Factor
   // 质押因子，每种货币有独立的质押因子，借款限额 = 质押价值 * 质押因子，
   // e.g. 如果用户提供 100 DAI作为抵押，而DAI的质押因子为75%，那么用户最多可以借入价值 75 DAI的资产。
-  let { 1: collateralFactor } = await comptrollerContract.callStatic.markets(
-    address
+  const collateralFactors = await Promise.all(
+    allMarkets.map(async ({ symbol, address }) => {
+      let { 1: collateralFactor } =
+        await comptrollerContract.callStatic.markets(address);
+      return [symbol, collateralFactor / 1e18];
+    })
   );
-  collateralFactor = (collateralFactor / 1e18) * 100; // Convert to percent
-  console.log("Collateral Factor:", collateralFactor);
+  const collateralFactorMap = Object.fromEntries(collateralFactors);
+  const collateralFactor = collateralFactorMap["BTC"] * 100; // Convert to percent
+  console.log("BTC Collateral Factor:", collateralFactor);
 
-  // Total Borrowed
-  // 已借额度：各币种已借之和（包含利息）
-  // Sum(underlyingTokenBorrowAmount * underlyingTokenUSDPrice)
-  const totalBorrowed = (
-    await Promise.all(
-      allMarkets.map(async ({ address, underlyingDecimals }: any) => {
+  // Collateralized Asset
+  // 质押资产
+  const collaterals = await comptrollerContract.getAssetsIn(wallet.address);
+  const collateralAssets = allMarkets.filter(({ address }) =>
+    collaterals.includes(address)
+  );
+  console.log(
+    "Collateralized Assets: ",
+    collateralAssets.map(({ symbol }) => symbol)
+  );
+
+  // underlyingTokenPrice
+  const underlyingTokenPrices = await Promise.all(
+    allMarkets.map(async ({ symbol, address, underlyingDecimals }) => {
+      let underlyingPriceInUSD = 0;
+      try {
+        underlyingPriceInUSD =
+        (await priceOracle.callStatic.getUnderlyingPrice(address)) /
+        Math.pow(10, 36 - underlyingDecimals);
+      } catch {
+        console.log(symbol, address)
+      }
+      return [symbol, underlyingPriceInUSD];
+
+    })
+  );
+  const underlyingTokenPriceMap = Object.fromEntries(underlyingTokenPrices);
+  console.log("underlyingTokenPriceMap:", underlyingTokenPriceMap);
+
+  // supplyBalance
+  const supplyBalances = await Promise.all(
+    allMarkets.map(
+      async ({ symbol, address, decimals, underlyingDecimals }) => {
         const cToken = new Contract(address, cTokenAbi, wallet);
-        let underlyingPriceInUsd =
-          await priceOracle.callStatic.getUnderlyingPrice(address);
-        underlyingPriceInUsd = underlyingPriceInUsd / 1e18; // getUnderlyingPrice provides price in USD with 18 decimal places
-        const borrowBalance = await cToken.callStatic.borrowBalanceCurrent(
-          myWalletAddress
-        );
-        return (
-          underlyingPriceInUsd *
-          (+borrowBalance / Math.pow(10, underlyingDecimals))
-        );
+        const [_error, tokenBalanceRaw, _borrowBalance, exchangeRateRaw] =
+          await cToken.getAccountSnapshot(myWalletAddress);
+        const exchangeRateDecimals = 18 + underlyingDecimals - decimals;
+        const exchangeRate =
+          exchangeRateRaw / Math.pow(10, exchangeRateDecimals);
+        const tokenBalance = tokenBalanceRaw / Math.pow(10, decimals);
+        const supplyBalance = tokenBalance * exchangeRate;
+
+        return [symbol, supplyBalance];
+      }
+    )
+  );
+  const supplyBalanceMap = Object.fromEntries(supplyBalances);
+  console.log("supplyBalanceMap:", supplyBalanceMap);
+
+  // borrowBalance
+  const borrowBalances = await Promise.all(
+    allMarkets.map(async ({ symbol, address, underlyingDecimals }) => {
+      const cToken = new Contract(address, cTokenAbi, wallet);
+      const [_error, _tokenBalance, borrowBalance, _exchangeRate] =
+        await cToken.getAccountSnapshot(myWalletAddress);
+      return [symbol, borrowBalance / Math.pow(10, underlyingDecimals)];
+    })
+  );
+  const borrowBalanceMap = Object.fromEntries(borrowBalances);
+  console.log("borrowBalanceMap:", borrowBalanceMap);
+
+  // Total Collateral
+  // 质押资产总额: Sum(collateralBalance * USDPrice)
+  const totalCollateral = (
+    await Promise.all(
+      collateralAssets.map(async ({ symbol }: any) => {
+        const underlyingPriceInUSD = underlyingTokenPriceMap[symbol];
+        const supplyBalance = supplyBalanceMap[symbol];
+        return underlyingPriceInUSD * supplyBalance;
       })
     )
   ).reduce((sum, usd) => sum + usd, 0);
-  console.log("Total Borrowed:", totalBorrowed);
-
-  // 账户流动性（liquidity）
-  // 剩余额度
-  const liquidity = await comptrollerContract.callStatic.getAccountLiquidity(
-    wallet.getAddress()
-  );
-  const currentLiquidity = +liquidity[1] / Math.pow(10, 18);
-  console.log("Liquidity:", currentLiquidity);
+  console.log("Total Collateral:", totalCollateral);
 
   // Borrow Limit
   // 总借款限额：各币种借款限额总和 = 已借 + 剩余
   // Borrow Limit = Total Borrowed + liquidity
   // Sum(collateralTokenAmount * collateralTokenUSDPrice * collateralFactor)
-  const borrowLimit = totalBorrowed + currentLiquidity;
+  const borrowLimit = (
+    await Promise.all(
+      collateralAssets.map(async ({ symbol }: any) => {
+        const price = underlyingTokenPriceMap[symbol];
+        const supplyBalance = supplyBalanceMap[symbol];
+        const collateralFactor = collateralFactorMap[symbol];
+        return price * collateralFactor * supplyBalance;
+      })
+    )
+  ).reduce((sum, usd) => sum + usd, 0);
   console.log("Borrowed Limit:", borrowLimit);
+
+  // Total Borrowed
+  // 已借额度
+  // Sum(underlyingTokenBorrowAmount * underlyingTokenUSDPrice)
+  const totalBorrowed = (
+    await Promise.all(
+      allMarkets.map(async ({ symbol }: any) => {
+        const price = underlyingTokenPriceMap[symbol];
+        const borrowBalance = borrowBalanceMap[symbol];
+        return price * borrowBalance;
+      })
+    )
+  ).reduce((sum, usd) => sum + usd, 0);
+  console.log("Total Borrowed:", totalBorrowed);
+
+  // 剩余借款额度 USD
+  const liquidity = await comptrollerContract.callStatic.getAccountLiquidity(
+    wallet.getAddress()
+  );
+  const currentLiquidity = +liquidity[1] / 1e18;
+  console.log("Liquidity:", currentLiquidity);
 
   // Borrow Limit Used
   // 额度使用率
   // Total Borrowed / Borrow Limit
   console.log(
     "Borrow Limit Used:",
-    borrowLimit === 0 ? 0 : (totalBorrowed / borrowLimit) * 100
+    Math.min(borrowLimit === 0 ? 0 : (totalBorrowed / borrowLimit) * 100, 100)
   );
 
   // Health
   // 健康度
   // Borrow Limit / Total Borrowed
-  console.log(
-    "Health:",
-    totalBorrowed === 0 ? 100 : borrowLimit / totalBorrowed
-  );
+  console.log("Health:", calculateHealth(borrowLimit, totalBorrowed));
 
   // Total Supplied
   // 供给资产总额
   // Sum(suppliedTokenAmount * suppliedTokenUSDPrice)
   const totalSupplied = (
     await Promise.all(
-      allMarkets.map(async ({ address, underlyingDecimals }: any) => {
-        const cToken = new Contract(address, cTokenAbi, wallet);
-        let underlyingPriceInUsd =
-          await priceOracle.callStatic.getUnderlyingPrice(address);
-        underlyingPriceInUsd = underlyingPriceInUsd / 18; // getUnderlyingPrice provides price in USD with 18 decimal places
-        const suppliedBalance = await cToken.callStatic.balanceOfUnderlying(
-          myWalletAddress
-        );
-        return (
-          underlyingPriceInUsd *
-          (+suppliedBalance / Math.pow(10, underlyingDecimals))
-        );
+      allMarkets.map(async ({ symbol }: any) => {
+        const price = underlyingTokenPriceMap[symbol];
+        const supplyBalance = supplyBalanceMap[symbol];
+        return price * supplyBalance;
       })
     )
   ).reduce((sum, usd) => sum + usd, 0);
   console.log("Total Supplied:", totalSupplied);
-
-  // Collateralized Assets
-  // underlyingTokenBalance > 0
-  const isCollateralize = async ({ address }: any) => {
-    const cToken = new Contract(address, cTokenAbi, wallet);
-    const underlyingBalance = await cToken.callStatic.balanceOfUnderlying(
-      myWalletAddress
-    );
-    return underlyingBalance
-  };
-  const underlyingTokenBalances = (await Promise.all(allMarkets.map(isCollateralize)));
-  const collateralAssets = underlyingTokenBalances.filter((balance) => balance.gt(0));
-  console.log(
-    "Collateralized Assets: ",
-    collateralAssets.map(({ symbol }) => symbol)
-  );
-
-  // Total Collateral
-  // 质押资产总额
-  const totalCollateral = (
-    await Promise.all(
-      collateralAssets.map(async ({ address, underlyingDecimals }: any) => {
-        const cToken = new Contract(address, cTokenAbi, wallet);
-        let underlyingPriceInUSD =
-          (await priceOracle.callStatic.getUnderlyingPrice(address)) / 1e18; // getUnderlyingPrice provides price in USD with 6 decimal places
-        const underlyingBalance = await cToken.callStatic.balanceOfUnderlying(
-          myWalletAddress
-        );
-        return (
-          underlyingPriceInUSD *
-          (+underlyingBalance / Math.pow(10, underlyingDecimals))
-        );
-      })
-    )
-  ).reduce((sum, usd) => sum + usd, 0);
-  console.log("Total Collateral:", totalCollateral);
 };
 
 const collateral = async function () {
@@ -414,7 +444,7 @@ const repay = async () => {
 const main = async () => {
   try {
     // await distributionAPY();
-    // await summary();
+    await summary();
     // await supply();
     // await collateral();
     // await revokeCollateral();
@@ -436,4 +466,10 @@ function calculateAPY(ratePerBlock: number) {
       1) *
     100
   );
+}
+
+function calculateHealth(liquidity: number, totalBorrowed: number) {
+  return totalBorrowed === 0
+    ? 100
+    : Math.min(liquidity / totalBorrowed, 100);
 }
