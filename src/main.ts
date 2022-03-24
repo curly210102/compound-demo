@@ -1,6 +1,6 @@
-import main from "./mumbai"
-import './style.css'
+import main from "./benqi/index";
+import "./style.css";
 
-const btn = document.querySelector<HTMLDivElement>('button')!;
+const btn = document.querySelector<HTMLDivElement>("button")!;
 
 btn.addEventListener("click", main);

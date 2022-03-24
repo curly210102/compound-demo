@@ -12,14 +12,13 @@ const privateKey =
 const wallet = new Wallet(privateKey, provider);
 const myWalletAddress = wallet.address;
 
-
 const comptrollerContractAddress = "0xADdC4b0d9A113D6295D95c9717D1b32b6b689FAE";
 const comptrollerContract = new Contract(
   comptrollerContractAddress,
   compAbi,
   wallet
 );
-const priceOracleAddress = await comptrollerContract.oracle()
+const priceOracleAddress = await comptrollerContract.oracle();
 const priceOracle = new Contract(priceOracleAddress, priceOracleAbi, wallet);
 
 const rewardTokenAddress = "0x153478A3898852B29C5adaA85a2619E8C6832917";
@@ -114,6 +113,7 @@ const supplyBorrowAPY = async () => {
 };
 
 const summary = async function () {
+  console.log("Start");
   // Collateral Factor
   // 质押因子，每种货币有独立的质押因子，借款限额 = 质押价值 * 质押因子，
   // e.g. 如果用户提供 100 DAI作为抵押，而DAI的质押因子为75%，那么用户最多可以借入价值 75 DAI的资产。
@@ -143,15 +143,11 @@ const summary = async function () {
   const underlyingTokenPrices = await Promise.all(
     allMarkets.map(async ({ symbol, address, underlyingDecimals }) => {
       let underlyingPriceInUSD = 0;
-      try {
-        underlyingPriceInUSD =
+      console.log(priceOracle.address);
+      underlyingPriceInUSD =
         (await priceOracle.callStatic.getUnderlyingPrice(address)) /
         Math.pow(10, 36 - underlyingDecimals);
-      } catch {
-        console.log(symbol, address)
-      }
       return [symbol, underlyingPriceInUSD];
-
     })
   );
   const underlyingTokenPriceMap = Object.fromEntries(underlyingTokenPrices);
@@ -469,7 +465,5 @@ function calculateAPY(ratePerBlock: number) {
 }
 
 function calculateHealth(liquidity: number, totalBorrowed: number) {
-  return totalBorrowed === 0
-    ? 100
-    : Math.min(liquidity / totalBorrowed, 100);
+  return totalBorrowed === 0 ? 100 : Math.min(liquidity / totalBorrowed, 100);
 }
