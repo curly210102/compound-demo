@@ -9,7 +9,13 @@ export default async function getHealth() {
   const borrowLimit = await getBorrowLimit();
   const totalBorrow = await getTotalBorrow();
 
-  return Math.max(Math.min(100, borrowLimit / totalBorrow), 0);
+  const health = borrowLimit / totalBorrow;
+
+  if (isNaN(health)) {
+    return 0;
+  } else {
+    return Math.max(Math.min(100, borrowLimit / totalBorrow), 0);
+  }
 }
 
 export async function healthAfterWithdraw(token: string, amount: BigNumber) {

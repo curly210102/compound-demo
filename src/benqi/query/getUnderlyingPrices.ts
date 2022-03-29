@@ -4,7 +4,6 @@ import getContract, { getComptroller } from "../utils/getContract";
 export default async function getUnderlyingPrices() {
   const comptroller = getComptroller();
   const oracleAddress = await comptroller.oracle();
-  console.log(oracleAddress);
   const priceOracle = getContract(oracleAddress, config.abi.priceOracle);
   // underlyingTokenPrice
   const underlyingTokenPrices = await Promise.all(

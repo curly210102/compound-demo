@@ -299,6 +299,7 @@ const revokeCollateral = async function () {
 };
 
 const supply = async function () {
+  console.log("Supply");
   let cToken = allMarkets[0];
   const { address, symbol, underlyingAddress, underlyingDecimals } = cToken;
   // isApproved
@@ -324,6 +325,8 @@ const supply = async function () {
       await wallet.getAddress(),
       cTokenContractAddress
     );
+
+    console.log(allowance.toString());
 
     if (underlyingToSupply.gt(allowance)) {
       const approve = await underlyingContract.approve(
@@ -440,8 +443,8 @@ const repay = async () => {
 const main = async () => {
   try {
     // await distributionAPY();
-    await summary();
-    // await supply();
+    // await summary();
+    await supply();
     // await collateral();
     // await revokeCollateral();
     // await withdraw();

@@ -73,21 +73,27 @@ const supply = async () => {
   );
 
   // Supply
-  const inputToSupply = "100";
+  const inputToSupply = "0.1";
   const underlyingToSupply = BigNumber.from(
     (+inputToSupply * Math.pow(10, underlyingDecimals)).toString()
   );
   if (!native) {
+    console.log("Approve");
     // Approve To Supply
     const allowance = await underlyingContract.callStatic.allowance(
       myWalletAddress,
       address
     );
 
+    console.log(allowance.toString());
+
     if (underlyingToSupply.gt(allowance)) {
       const approve = await underlyingContract.approve(
         address,
-        underlyingToSupply.toString()
+        underlyingToSupply.toString(),
+        {
+          from: myWalletAddress,
+        }
       );
       await approve.wait(1);
       console.log("Approved");
@@ -96,7 +102,17 @@ const supply = async () => {
     }
   }
 
-  const tx = await cTokenContract.mint(underlyingToSupply.toString());
+  console.log(myWalletAddress);
+  const tx = await cTokenContract.mint(
+    native
+      ? {
+          value: underlyingToSupply,
+        }
+      : underlyingToSupply,
+    {
+      from: myWalletAddress,
+    }
+  );
   await tx.wait(1); // wait until the transaction has 1 confirmation on the blockchain
   console.log(`"Mint" operation successful.`, "\n");
 };
@@ -333,8 +349,8 @@ const repay = async () => {
 };
 
 const main = async () => {
-  await globalStatus();
-  // await supply();
+  // await globalStatus();
+  await supply();
   // await collateral();
   // await revokeCollateral();
   // await withdraw();
